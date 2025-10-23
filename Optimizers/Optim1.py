@@ -1,3 +1,10 @@
+"""
+Newton (your original) converges fast near the root but can explode when gradients are tiny or Hessian effects are wild; damping could help.
+Secant (α-wise) is a great compromise: cheap, 1-D, often stable, and doesn’t require exact line search.
+Bisection/Brent (α-wise) are rock-solid if you can bracket.
+Param-wise secant is the simplest gradient-free swap, but it’s the most brittle in high-D because it treats each coordinate as a separate 1-D problem tied to a single scalar residual.
+"""
+
 import torch
 from torch.optim.optimizer import Optimizer
 
@@ -5,7 +12,7 @@ from torch.optim.optimizer import Optimizer
 class RootFinding(Optimizer):
     def __init__(self, params, gamma=0.95, inner_steps=3):
         # Defaults Stores hyperparameters
-        defaults = dict(gamma=gamma, inner_steps=inner_steps)
+        defaults = dict(gamma=gamma, inner_steps=inner_steps, eps=1e-8)
         # Gamma represents c decrease,
         # inner_steps represents how many times we solve the equation f = c
         super(RootFinding,self).__init__(params, defaults)
@@ -42,5 +49,5 @@ class RootFinding(Optimizer):
                 grad = parameter.grad
 
                 #  Simple step x(t+1) = x(t) - (f - c)/f'
-                parameter.minus_((curr_loss - self.c)/grad)
+                parameter.add_(- (curr_loss - self.c) / (grad + self.defaults['eps']))
 
