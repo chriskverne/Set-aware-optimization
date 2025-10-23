@@ -36,18 +36,20 @@ class RootFinding(Optimizer):
             self.zero_grad()
             curr_loss.backward()
             # Do single step
-            self.step(curr_loss)
+            self.newton_step(curr_loss)
         
         # Update target c
         self.update_root(loss_fn(model(inputs), targets))
 
-    def step(self, curr_loss):
-        # param_groups is a set of dictionaires where each dict has some params and some hyperparams for those params
-        for group in self.param_groups:
-            # Iterate over each parameter in the parameter group
-            for parameter in group['params']:
-                grad = parameter.grad
+    def newton_step(self, curr_loss):
+        # Apply newton's step:
+        #  x - (f-c)g/||g||^2
 
-                #  Simple step x(t+1) = x(t) - (f - c)/f'
-                parameter.add_(- (curr_loss - self.c) / (grad + self.defaults['eps']))
-
+        # 1) Compute sum (g^2)
+        g2 = p.grad.pow(2).sum
+        
+        # 2) update params
+        with torch.no_grad():
+            for group in self.param_groups:
+                for p in group['params']:
+                    p.add_(-(curr_loss-self.c)*p.grad/(g2+self.defaults['eps']))
