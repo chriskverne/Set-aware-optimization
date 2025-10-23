@@ -29,27 +29,30 @@ class RootFinding(Optimizer):
             curr_loss = loss_fn(model(inputs), targets)
             self.update_root(curr_loss)
         
-        for i in range(self.defaults['inner_steps']):
+        for _ in range(self.defaults['inner_steps']):
             # Get current loss
             curr_loss = loss_fn(model(inputs), targets)
             # compute grads
             self.zero_grad()
             curr_loss.backward()
             # Do single step
-            self.newton_step(curr_loss)
+            self.polyak_step(curr_loss)
         
         # Update target c
         self.update_root(loss_fn(model(inputs), targets))
 
-    def newton_step(self, curr_loss):
+    def polyak_step(self, curr_loss):
         # Apply newton's step:
         #  x - (f-c)g/||g||^2
-
-        # 1) Compute sum (g^2)
-        g2 = p.grad.pow(2).sum
         
-        # 2) update params
         with torch.no_grad():
+            # 1) Compute sum (g^2)
+            g2 = 0
+            for group in self.param_groups:
+                for p in group['params']:
+                    g2 += p.grad.pow(2).sum()
+
+            # 2) update params
             for group in self.param_groups:
                 for p in group['params']:
                     p.add_(-(curr_loss-self.c)*p.grad/(g2+self.defaults['eps']))
