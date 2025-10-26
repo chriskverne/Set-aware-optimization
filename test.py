@@ -51,14 +51,14 @@ class MLP(nn.Module):
 from Optimizers.Optim import RootFinding
 
 model = MLP()
-optimizer = RootFinding(model.parameters(), gamma=0.90, inner_steps=3)
+optimizer = RootFinding(model.parameters(), gamma=0.95, inner_steps=3)
 n_epochs = 100
 loss_fn = nn.MSELoss()
 for epoch in range(n_epochs):
     preds = model(x)
     loss = loss_fn(preds, y)
 
-    optimizer.iterate_inner_loop(model, loss_fn, x, y)
+    optimizer.iterate_inner_loop(model, loss_fn, x, y, mode='secant')
     print(f'Epoch: {epoch}, Loss: {loss}')
 
 
