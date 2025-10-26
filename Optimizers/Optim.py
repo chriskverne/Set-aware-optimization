@@ -18,10 +18,15 @@ class RootFinding(Optimizer):
         super(RootFinding,self).__init__(params, defaults)
         # Represents current root we try to solve f = c for (This changes throguh optimization)
         self.c =  None 
+        # self.a = None Explore later for setting root
+        # self.b = 0 Explore later for setting root
 
     def update_root(self, curr_loss):
         # We can find more sophisticated methods for this approach
         self.c = curr_loss * self.defaults['gamma']
+
+    def bi_section_root_update(self, curr_loss):
+        self.c = [self.a + self.b]/2
 
     def iterate_inner_loop(self, model, loss_fn, inputs, targets, mode='secant'):
         # Set inital target if not set
@@ -46,6 +51,16 @@ class RootFinding(Optimizer):
                 # Do single step
                 self.polyak_step(curr_loss)
         
+        elif mode == 'sgd':
+            for _ in range(self.defaults['inner_steps']):
+                # Get current loss
+                curr_loss = loss_fn(model(inputs), targets)
+                # compute grads
+                self.zero_grad()
+                curr_loss.backward()
+                # Do single step
+                self.sgd_root_step(curr_loss, lr=0.01)
+
         # Update target c
         self.update_root(loss_fn(model(inputs), targets))
 
@@ -65,7 +80,7 @@ class RootFinding(Optimizer):
                 for p in group['params']:
                     p.add_(-(curr_loss-self.c)*p.grad/(g2+self.defaults['eps']))
     
-    def secant_step(self, curr_loss, pilot_scale=1e-3):
+    def secant_step(self, curr_loss, pilot_scale=1e-2):
         with torch.no_grad():
             # residual (keep self.c as a float)
             r_n = float(curr_loss.detach().item()) - float(self.c)
@@ -105,59 +120,13 @@ class RootFinding(Optimizer):
             # (3) save the pre-update snapshot as the new "prev"
             self.state['secant_prev'] = {'params': params_n_snapshot, 'residual': r_n}
 
-
-    # def secant_step(self,curr_loss,pilot_scale=1e-3):
-    #     # Uses x(t+1) = x(t) = f/f' however it tries to approximate f' using 2 FPs
-    #     # f' = f(t+1) - f(t)/ x(t+1) - x(t)
-    #     # x0 and x1 start at random values where ideally there is a root between them somewhere
-
-    #     # For multivariable functions:
-    #     # r(x) = loss(x) - c.
-    #     # Uses: x_{n+1} = x_n - r_n * (x_n - x_{n-1}) / (r_n - r_{n-1})
-
-    #     with torch.no_grad():
-    #         r_n = curr_loss - self.c
-
-    #         # Get previous params / loss
-    #         prev = self.state.get('secant_prev')
-
-    #         # Store current params as previous for next step
-    #         curr_snapshot = []
-    #         for group in self.param_groups:
-    #             for p in group['params']:
-    #                 curr_snapshot.append(p.data.clone())
-
-    #         # In case of first call just sore x_n and r_n
-    #         if prev is None:
-    #             self.state['secant_prev'] = {'params': curr_snapshot, 'residual': r_n.clone()}
-    #             for g in self.param_groups:
-    #                 for p in g['params']:
-    #                     # keep step size roughly in units of the parameter magnitude
-    #                     mag = p.data.norm().item()
-    #                     if mag == 0.0:
-    #                         mag = 1.0
-    #                     u = torch.randn_like(p.data)
-    #                     u = u / (u.norm() + 1e-12)  # unit direction
-    #                     p.add_(-pilot_scale * mag * u)
-    #             return
+    def sgd_root_step(self, curr_loss, lr=0.01):
+        # want to find where f(x) = c
+        # define g(x) = 0.5[f(x) - c]^2
+        # gradient g(x) = [f(x) - c] gradient f(x)
+        # x(t+1) = x(t) - eta[f(x)-c] gradient f(x)
+        with torch.no_grad():
+            for group in self.param_groups:
+                for p in group['params']:
+                    p.add_(-lr*(curr_loss-self.c)*p.grad)
             
-    #         # r_n - - r_{n-1} (Consider checking ig this is too small)
-    #         denom = r_n - prev['residual']
-
-    #         # Uses: x_{n+1} = x_n - r_n * (x_n - x_{n-1}) / (r_n - r_{n-1})
-    #         i = 0
-    #         step_scale = r_n / denom
-    #         for group in self.param_groups:
-    #             for p in group['params']:
-    #                 #x_n - x_{n-1}
-    #                 diff = p.data - prev['params'][i]
-    #                 # print(r_n, diff, denom)
-    #                 p.add_(-diff * step_scale)
-    #                 i+= 1
-
-    #         # Refresh cache for next call (store *post-step* current as "prev" for n+1)
-    #         updated_snapshot = []
-    #         for group in self.param_groups:
-    #             for p in group['params']:
-    #                 updated_snapshot.append(p.data.clone())
-    #         self.state['secant_prev'] = {'params': updated_snapshot, 'residual': r_n.clone()}

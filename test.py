@@ -37,7 +37,7 @@ class MLP(nn.Module):
 # model = MLP()
 # optimizer = optim.Adam(model.parameters(), lr=0.01)
 # loss_fn = nn.MSELoss()
-# n_epochs = 1000
+# n_epochs = 100
 # for epoch in range(n_epochs):
 #     pred = model(x)
 #     loss = loss_fn(pred, y)
@@ -51,14 +51,17 @@ class MLP(nn.Module):
 from Optimizers.Optim import RootFinding
 
 model = MLP()
-optimizer = RootFinding(model.parameters(), gamma=0.95, inner_steps=3)
+optimizer = RootFinding(model.parameters(), gamma=0.9, inner_steps=10)
 n_epochs = 100
 loss_fn = nn.MSELoss()
+preds_temp = model(x)
+print(f'Starting Loss {loss_fn(preds_temp, y)}')
 for epoch in range(n_epochs):
     preds = model(x)
     loss = loss_fn(preds, y)
 
-    optimizer.iterate_inner_loop(model, loss_fn, x, y, mode='secant')
+    optimizer.iterate_inner_loop(model, loss_fn, x, y, mode='sgd')
+    optimizer.step()
     print(f'Epoch: {epoch}, Loss: {loss}')
 
 
