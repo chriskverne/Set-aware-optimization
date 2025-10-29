@@ -35,12 +35,12 @@ from Optimizers.AdamRoot import AdamRoot
 
 model = MLP()
 loss_fn = nn.MSELoss()
-optimizer = AdamRoot(model.parameters(), lr=0.01, gamma=0, ema_c=0.9, dir_norm_clip=100000, alpha_max=10)
+optimizer = AdamRoot(model.parameters(), lr=0.001, gamma=0.8, ema_c=0.9, dir_norm_clip=100000, alpha_max=10)
 
 # ------------------------------
 # Training loop
 # ------------------------------
-for epoch in range(100):
+for epoch in range(10000):
 
     def closure():
         optimizer.zero_grad(set_to_none=True)

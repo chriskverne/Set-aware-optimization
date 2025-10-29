@@ -3,6 +3,10 @@ Newton (your original) converges fast near the root but can explode when gradien
 Secant (α-wise) is a great compromise: cheap, 1-D, often stable, and doesn’t require exact line search.
 Bisection/Brent (α-wise) are rock-solid if you can bracket.
 Param-wise secant is the simplest gradient-free swap, but it’s the most brittle in high-D because it treats each coordinate as a separate 1-D problem tied to a single scalar residual.
+
+Generative Model Inversion: You have a trained GAN generator $G(\mathbf{z})$ that turns random noise $\mathbf{z}$ into an image. If you want to find the specific noise vector $\mathbf{z}$ that creates a particular target image $\mathbf{y}$, you solve $G(\mathbf{z}) - \mathbf{y} = \mathbf{0}$. This is exactly your problem!
+Physics-Informed Neural Networks (PINNs): In PINNs, a network must obey a physical law, often expressed as a differential equation like $\text{PDE}(\mathbf{f}) = 0$. The training involves finding weights $\mathbf{w}$ that satisfy this equation at many points, which is a root-finding task.
+Control Theory & Robotics: Finding the exact sequence of motor commands (the network's output) to place a robotic arm in a specific target position.
 """
 
 import torch
@@ -25,7 +29,7 @@ class RootFinding(Optimizer):
         # We can find more sophisticated methods for this approach
         self.c = curr_loss * self.defaults['gamma']
 
-    def bi_section_root_update(self, curr_loss):
+    def bisection_root_update(self, curr_loss):
         self.c = [self.a + self.b]/2
 
     def iterate_inner_loop(self, model, loss_fn, inputs, targets, mode='secant'):
