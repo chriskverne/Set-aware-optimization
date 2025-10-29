@@ -28,15 +28,35 @@ class RootFinding(Optimizer):
     def update_root(self, curr_loss):
         # We can find more sophisticated methods for this approach
         self.c = curr_loss * self.defaults['gamma']
+    
+    def bisection_update_root(self, loss_after):
+        a,b = self.state['loss_bounds']
+        new_b = loss_after
+        # if new loss < current loss
+        if loss_after < b:
+            new_b = loss_after
+            # if new loss < root
+            if loss_after <= self.c:
+                new_a = a
+            else:
+                new_a = (a+self.c)/2.0
 
-    def bisection_root_update(self, curr_loss):
-        self.c = [self.a + self.b]/2
+            self.state['loss_bounds'] = [new_a, new_b]
+        else:
+            self.state['loss_bounds'] = [self.c, b]
 
-    def iterate_inner_loop(self, model, loss_fn, inputs, targets, mode='secant'):
-        # Set inital target if not set
+    def iterate_inner_loop(self, model, loss_fn, inputs, targets, mode='secant', root_update='bisection'):
         if self.c is None:
-            curr_loss = loss_fn(model(inputs), targets)
-            self.update_root(curr_loss)
+            # Set inital target if not set
+            if root_update == 'decay':
+                curr_loss = loss_fn(model(inputs), targets)
+                self.update_root(curr_loss)
+            elif root_update == 'bisection':
+                curr_loss = loss_fn(model(inputs), targets)
+                self.state['loss_bounds'] = [0, curr_loss]
+                self.c = (curr_loss) / 2.0
+            else:
+                self.c = 0.1
         
         if mode == 'secant':
             for _ in range(self.defaults['inner_steps']):
@@ -66,7 +86,12 @@ class RootFinding(Optimizer):
                 self.sgd_root_step(curr_loss, lr=0.01)
 
         # Update target c
-        self.update_root(loss_fn(model(inputs), targets))
+        if root_update == 'decay':
+            self.update_root(loss_fn(model(inputs), targets))
+        
+        elif root_update == 'bisection':
+            loss_after = loss_fn(model(inputs), targets)
+            self.bisection_update_root(loss_after)
 
     def polyak_step(self, curr_loss):
         # Apply newton's step:
