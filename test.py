@@ -50,11 +50,13 @@ class MLP(nn.Module):
 # Loss RootFinder
 from Optimizers.Optim import RootFinding
 from Optimizers.Optim_no_cost import BroydenRootFinder
+from Optimizers.AdamLr import RootStep
 
 model = MLP()
-optimizer = RootFinding(model.parameters(), gamma=0.9, inner_steps=3)
+# optimizer = RootFinding(model.parameters(), gamma=0.9, inner_steps=3)
 # optimizer = RootFindingVectorPolyak(model.parameters())
 # optimizer = optim.Adam(model.parameters(), lr=0.01)
+optimizer = RootStep(model.parameters(), gamma=0, lr=0.01)
 n_epochs = 100
 loss_fn = nn.MSELoss()
 preds_temp = model(x)
@@ -62,8 +64,8 @@ print(f'Starting Loss {loss_fn(preds_temp, y)}')
 for epoch in range(n_epochs):
     preds = model(x)
     loss = loss_fn(preds, y)
-    loss.backward()
-    optimizer.iterate_inner_loop(model, loss_fn, x, y, mode='adam_root', root_update='decay')
+    optimizer.step(loss, update_c="decay")
+    # optimizer.iterate_inner_loop(model, loss_fn, x, y, mode='adam_root', root_update='decay')
     print(f'Epoch: {epoch}, Loss: {loss}')
 
 # model = MLP()
