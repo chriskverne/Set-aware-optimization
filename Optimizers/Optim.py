@@ -7,23 +7,52 @@ Param-wise secant is the simplest gradient-free swap, but it’s the most brittl
 Generative Model Inversion: You have a trained GAN generator $G(\mathbf{z})$ that turns random noise $\mathbf{z}$ into an image. If you want to find the specific noise vector $\mathbf{z}$ that creates a particular target image $\mathbf{y}$, you solve $G(\mathbf{z}) - \mathbf{y} = \mathbf{0}$. This is exactly your problem!
 Physics-Informed Neural Networks (PINNs): In PINNs, a network must obey a physical law, often expressed as a differential equation like $\text{PDE}(\mathbf{f}) = 0$. The training involves finding weights $\mathbf{w}$ that satisfy this equation at many points, which is a root-finding task.
 Control Theory & Robotics: Finding the exact sequence of motor commands (the network's output) to place a robotic arm in a specific target position.
+
+for adam:
+compute a = curr_loss - c (If large we need to take a larger step likely)
+use a to scale lr for adam
+p_t+1 = p_t - (lr * a) * m/sqrt(v) + e
 """
 
 import torch
+import torch.optim as optim
 from torch.optim.optimizer import Optimizer
 
 # Needs to override __init__(), step(), zero_grad()
 class RootFinding(Optimizer):
-    def __init__(self, params, gamma=0.95, inner_steps=3):
+    def __init__(self, params, lr=0.001, gamma=0.95, inner_steps=3):
         # Defaults Stores hyperparameters
         defaults = dict(gamma=gamma, inner_steps=inner_steps, eps=1e-8)
         # Gamma represents c decrease,
         # inner_steps represents how many times we solve the equation f = c
         super(RootFinding,self).__init__(params, defaults)
         # Represents current root we try to solve f = c for (This changes throguh optimization)
+        self.adam_optimizer = optim.Adam(self.param_groups, lr=self.defaults['lr'])
         self.c =  None 
         # self.a = None Explore later for setting root
         # self.b = 0 Explore later for setting root
+    
+    def zero_grad(self, set_to_none: bool = False):
+        self.adam_optimizer.zero_grad(set_to_none=set_to_none)
+    
+    def step(self, closure=None):
+        # This can be a simple pass-through if not used directly
+        return self.adam_optimizer.step(closure)
+    
+    def adam_root_step(self, curr_loss):
+        original_lr = self.defaults['lr']
+
+        # 2. Calculate the dynamic modifier
+        alpha = abs(self.c - curr_loss.detach())
+        # 3. Temporarily set the new, modulated learning rate
+        for param_group in self.adam_optimizer.param_groups:
+            param_group['lr'] = original_lr * alpha
+
+        self.adam_optimizer.step()
+
+        # 5. CRITICAL: Restore the original learning rate for the next iteration
+        for param_group in self.adam_optimizer.param_groups:
+            param_group['lr'] = original_lr
 
     def update_root(self, curr_loss):
         # We can find more sophisticated methods for this approach
@@ -84,6 +113,16 @@ class RootFinding(Optimizer):
                 curr_loss.backward()
                 # Do single step
                 self.sgd_root_step(curr_loss, lr=0.01)
+        
+        elif mode == 'adam_root':
+            for _ in range(self.defaults['inner_steps']):
+                # Standard forward/backward pass
+                self.zero_grad()
+                curr_loss = loss_fn(model(inputs), targets)
+                curr_loss.backward()
+
+                # Perform our custom root-aware Adam step
+                self.adam_root_step(curr_loss)
 
         # Update target c
         if root_update == 'decay':

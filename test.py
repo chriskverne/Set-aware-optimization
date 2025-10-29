@@ -63,7 +63,7 @@ for epoch in range(n_epochs):
     preds = model(x)
     loss = loss_fn(preds, y)
     loss.backward()
-    optimizer.iterate_inner_loop(model, loss_fn, x, y, mode='polyak', root_update='d')
+    optimizer.iterate_inner_loop(model, loss_fn, x, y, mode='adam_root', root_update='decay')
     print(f'Epoch: {epoch}, Loss: {loss}')
 
 # model = MLP()
